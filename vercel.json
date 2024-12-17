@@ -1,0 +1,14 @@
+{
+    "functions": {
+        "api/analyze-image/*.ts": {
+            "maxDuration": 60
+        },
+        "api/enhance-prompt/*.ts": {
+            "maxDuration": 60
+        },
+        "api/improve-prompts/*.ts": {
+            "maxDuration": 60
+        }
+    }
+}
+}
