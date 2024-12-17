@@ -19,6 +19,15 @@ interface AnalysisResponse {
   improvementDirections: ImprovementDirection[];
 }
 
+// Valid media types for Anthropic API
+const VALID_MEDIA_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'] as const;
+type ValidMediaType = typeof VALID_MEDIA_TYPES[number];
+
+// Helper function to validate media type
+function isValidMediaType(mediaType: string): mediaType is ValidMediaType {
+  return VALID_MEDIA_TYPES.includes(mediaType as ValidMediaType);
+}
+
 export async function POST(request: Request) {
   if (!process.env.ANTHROPIC_API_KEY) {
     return NextResponse.json(
@@ -40,6 +49,10 @@ export async function POST(request: Request) {
     }
 
     const contentType = response.headers.get('content-type') || 'image/jpeg';
+    if (!isValidMediaType(contentType)) {
+      throw new Error(`Unsupported image type: ${contentType}. Supported types are: ${VALID_MEDIA_TYPES.join(', ')}`);
+    }
+
     const imageBuffer = await response.arrayBuffer();
     const base64Image = Buffer.from(imageBuffer).toString('base64');
 
@@ -102,7 +115,11 @@ export async function POST(request: Request) {
       }]
     });
 
-    const content = message.content[0].text;
+    // Extract text content from the response
+    const content = message.content.find(block => block.type === 'text')?.text;
+    if (!content) {
+      throw new Error('No text content in response');
+    }
 
     try {
       const cleanedContent = content

@@ -93,7 +93,13 @@ Provide ONLY the improved prompt text, without explanations or notes.`
             }]
         });
 
-        return NextResponse.json(message.content[0].text);
+        // Extract text content from the response
+        const content = message.content.find(block => block.type === 'text')?.text;
+        if (!content) {
+            throw new Error('No text content in response');
+        }
+
+        return NextResponse.json(content);
     } catch (error) {
         console.error('Error processing request:', error);
         return NextResponse.json(

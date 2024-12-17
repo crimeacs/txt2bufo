@@ -32,7 +32,13 @@ Return ONLY the enhanced prompt text, nothing else.`
       }]
     });
 
-    return NextResponse.json(message.content[0].text);
+    // Extract text content from the response
+    const content = message.content.find(block => block.type === 'text')?.text;
+    if (!content) {
+      throw new Error('No text content in response');
+    }
+
+    return NextResponse.json(content);
   } catch (error) {
     console.error('Error enhancing prompt:', error);
     return NextResponse.json({ error: 'Failed to enhance prompt' }, { status: 500 });

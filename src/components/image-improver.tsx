@@ -195,6 +195,76 @@ const StatusBadge: React.FC<{ status: Iteration['status'] }> = ({ status }) => (
     </div>
 );
 
+// Add type for subscription result
+interface FalSubscriptionResult {
+    data: {
+        images: Array<{
+            url: string;
+        }>;
+    };
+    unsubscribe?: () => Promise<void>;
+}
+
+interface RembgResult {
+    data?: {
+        image?: {
+            url: string;
+        };
+    };
+}
+
+// Add QR code modal state
+interface QRModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+}
+
+const VenmoQRModal: React.FC<QRModalProps> = ({ isOpen, onClose }) => {
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] backdrop-blur-sm"
+             onClick={onClose}>
+            <div className="bg-white p-8 rounded-2xl shadow-xl max-w-sm w-full mx-4 transform transition-all"
+                 onClick={e => e.stopPropagation()}>
+                <div className="text-center space-y-6">
+                    <div className="space-y-2">
+                        <h3 className="text-xl font-bold text-slate-900">Support txt2bufo</h3>
+                        <p className="text-sm text-slate-600">Your support helps keep the frogs hopping! 🐸</p>
+                    </div>
+                    <div className="bg-gradient-to-br from-indigo-50 to-purple-50 p-6 rounded-xl shadow-inner">
+                        <img 
+                            src="/qr.png"
+                            alt="Venmo QR Code"
+                            className="w-full h-auto rounded-lg"
+                        />
+                    </div>
+                    <div className="space-y-4">
+                        <p className="text-sm text-slate-600">Scan with your phone's camera or Venmo app</p>
+                        <div className="flex flex-col gap-3">
+                            <a
+                                href="https://venmo.com/u/Artemii-Novoselov"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors duration-200 flex items-center justify-center gap-2"
+                            >
+                                Open in Venmo App
+                                <span className="text-white opacity-75">📱</span>
+                            </a>
+                            <button
+                                onClick={onClose}
+                                className="text-slate-500 hover:text-slate-700 text-sm font-medium"
+                            >
+                                Maybe Later
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 export default function ImageImprover() {
     const [prompt, setPrompt] = useState('');
     const [iterations, setIterations] = useState<Iteration[]>([]);
@@ -217,6 +287,7 @@ export default function ImageImprover() {
     } | null>(null);
     const [currentSeed, setCurrentSeed] = useState<number | null>(null);
     const [selectedIterationNumber, setSelectedIterationNumber] = useState<number | null>(null);
+    const [isQRModalOpen, setIsQRModalOpen] = useState(false);
 
     // Add this useEffect to handle the refs array
     React.useEffect(() => {
@@ -228,7 +299,7 @@ export default function ImageImprover() {
     const generateImage = async (currentPrompt: string) => {
         setProcessState({ step: 'generating', message: 'Generating image with Fal.ai...' });
 
-        let subscription;
+        let subscription: FalSubscriptionResult | undefined;
         try {
             // Generate initial image as before
             const styleInstruction = selectedMode.description;
@@ -272,7 +343,7 @@ export default function ImageImprover() {
                         crop_to_bbox: true
                     },
                     logs: true
-                });
+                }) as RembgResult;
 
                 if (rembgResult?.data?.image?.url) {
                     imageUrl = rembgResult.data.image.url;
@@ -283,11 +354,24 @@ export default function ImageImprover() {
 
             return imageUrl;
         } catch (error) {
-            if (subscription?.unsubscribe) {
-                subscription.unsubscribe();
+            try {
+                // Attempt to unsubscribe if possible
+                if (subscription?.unsubscribe) {
+                    await subscription.unsubscribe();
+                }
+            } catch (unsubError) {
+                console.warn('Failed to unsubscribe:', unsubError);
             }
             console.error('Detailed generation error:', error);
-            throw new Error(`Image generation failed: ${error.message || error}`);
+            
+            // Properly handle the unknown error type
+            if (error instanceof Error) {
+                throw error;
+            } else if (typeof error === 'string') {
+                throw new Error(error);
+            } else {
+                throw new Error('An unknown error occurred during image generation');
+            }
         }
     };
 
@@ -552,10 +636,35 @@ export default function ImageImprover() {
 
     return (
         <div className="flex h-screen bg-slate-50">
+            {/* Donation Banner */}
+            <div className="fixed top-0 left-0 right-0 bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-2 px-4 z-50 shadow-lg">
+                <div className="max-w-7xl mx-auto flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <span className="text-yellow-300 animate-bounce">⭐</span>
+                        <p className="text-sm md:text-base">
+                            Love txt2bufo? Help keep the magic alive!
+                        </p>
+                    </div>
+                    <button
+                        onClick={() => setIsQRModalOpen(true)}
+                        className="px-4 py-1 bg-white text-indigo-600 rounded-full text-sm font-medium hover:bg-yellow-100 transition-colors duration-200 flex items-center gap-2"
+                    >
+                        Support the Project
+                        <span className="text-xs opacity-75">📱</span>
+                    </button>
+                </div>
+            </div>
+
+            {/* QR Code Modal */}
+            <VenmoQRModal 
+                isOpen={isQRModalOpen}
+                onClose={() => setIsQRModalOpen(false)}
+            />
+
             {/* Left Controls Sidebar */}
             <div className="w-[320px] h-full bg-white border-r border-slate-200 flex flex-col">
-                {/* Header Section */}
-                <div className="p-8 border-b border-slate-100">
+                {/* Add padding-top to account for the banner */}
+                <div className="p-8 border-b border-slate-100 mt-12">
                     <div className="space-y-4">
                         <div className="flex items-center gap-2">
                             <h1 className="text-2xl font-bold text-slate-900">
@@ -642,7 +751,8 @@ export default function ImageImprover() {
 
             {/* Main Image Display with Gallery */}
             <div className="flex-1 flex flex-col">
-                <div className="flex-1 flex items-center justify-center p-8">
+                {/* Add padding-top to account for the banner */}
+                <div className="flex-1 flex items-center justify-center p-8 mt-12">
                     {selectedIteration ? (
                         <div className="relative w-full max-w-2xl mx-auto">
                             {/* Main Image */}
@@ -674,13 +784,13 @@ export default function ImageImprover() {
                                                 key={iteration.number}
                                                 onClick={() => setSelectedIterationNumber(iteration.number)}
                                                 className={`
-                        relative group w-24 h-24 rounded-xl overflow-hidden
-                        transition-all duration-300 ease-in-out
-                        ${iteration.number === selectedIterationNumber
+                                                    relative group w-24 h-24 rounded-xl overflow-hidden
+                                                    transition-all duration-300 ease-in-out
+                                                    ${iteration.number === selectedIterationNumber
                                                         ? 'ring-2 ring-indigo-500 ring-offset-2 scale-105'
                                                         : 'opacity-70 hover:opacity-100 hover:scale-105'
                                                     }
-                    `}
+                                                `}
                                             >
                                                 {iteration.imageUrl ? (
                                                     <img
@@ -694,9 +804,9 @@ export default function ImageImprover() {
                                                     </div>
                                                 )}
                                                 <div className="absolute inset-0 flex items-center justify-center
-                          bg-black/0 group-hover:bg-black/10 transition-colors duration-200">
+                                                    bg-black/0 group-hover:bg-black/10 transition-colors duration-200">
                                                     <span className="text-sm font-medium text-white/90 
-                               shadow-sm px-2 py-1 rounded-full bg-black/20">
+                                                        shadow-sm px-2 py-1 rounded-full bg-black/20">
                                                         #{iteration.number}
                                                     </span>
                                                 </div>
@@ -714,9 +824,11 @@ export default function ImageImprover() {
                 {/* Spacer for Gallery */}
                 <div className="h-32" />
             </div>
+
             {/* Enhancement Panel - Right Side */}
             <div className="w-[320px] bg-white border-l border-slate-200">
-                <div className="p-6">
+                {/* Add padding-top to account for the banner */}
+                <div className="p-6 mt-12">
                     <h3 className="text-sm font-medium text-slate-900 mb-6">
                         Enhancement Options
                     </h3>
@@ -727,13 +839,13 @@ export default function ImageImprover() {
                             onClick={() => handleImprovementSelection(selectedIteration, direction, idx)}
                             disabled={isLoading}
                             className={`
-                                    w-full p-4 rounded-lg text-left transition-all duration-200
-                                    group relative border-2
-                                    ${selectedImprovement?.improvementIndex === idx
+                                w-full p-4 rounded-lg text-left transition-all duration-200
+                                group relative border-2 mb-3
+                                ${selectedImprovement?.improvementIndex === idx
                                     ? 'bg-indigo-50 border-indigo-500'
                                     : 'hover:bg-slate-50 border-slate-200'
                                 }
-                                `}
+                            `}
                         >
                             <h4 className="text-sm font-medium text-slate-900 mb-1">
                                 {direction.title}
@@ -742,7 +854,7 @@ export default function ImageImprover() {
                                 {direction.description}
                             </p>
                             <span className="absolute right-3 top-1/2 -translate-y-1/2 
-                                               text-slate-400 group-hover:text-indigo-500 transition-colors duration-200">
+                                text-slate-400 group-hover:text-indigo-500 transition-colors duration-200">
                                 →
                             </span>
                         </button>
