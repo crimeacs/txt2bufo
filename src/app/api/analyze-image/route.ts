@@ -28,6 +28,20 @@ function isValidMediaType(mediaType: string): mediaType is ValidMediaType {
   return VALID_MEDIA_TYPES.includes(mediaType as ValidMediaType);
 }
 
+// Add timeout to fetch
+const fetchWithTimeout = async (url: string, timeout = 5000) => {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(id);
+    return response;
+  } catch (error) {
+    clearTimeout(id);
+    throw error;
+  }
+};
+
 export async function POST(request: Request) {
   if (!process.env.ANTHROPIC_API_KEY) {
     return NextResponse.json(
@@ -42,8 +56,8 @@ export async function POST(request: Request) {
     // Add debug logging
     console.log('Analyzing image:', { imageUrl, layout });
 
-    // Fetch the image
-    const response = await fetch(imageUrl);
+    // Fetch the image with timeout
+    const response = await fetchWithTimeout(imageUrl, 5000);
     if (!response.ok) {
       throw new Error(`Failed to fetch image: ${response.statusText}`);
     }
@@ -58,7 +72,8 @@ export async function POST(request: Request) {
 
     console.log('Image fetched and encoded, sending to Claude...');
 
-    const message = await anthropic.messages.create({
+    // Set a timeout for the Claude API call
+    const messagePromise = anthropic.messages.create({
       model: "claude-3-5-sonnet-20241022",
       max_tokens: 1024,
       messages: [{
@@ -114,6 +129,13 @@ export async function POST(request: Request) {
         ]
       }]
     });
+
+    // Wait for Claude's response with a timeout
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Claude API timeout')), 50000);
+    });
+
+    const message = await Promise.race([messagePromise, timeoutPromise]) as Anthropic.Message;
 
     // Extract text content from the response
     const content = message.content.find(block => block.type === 'text')?.text;
